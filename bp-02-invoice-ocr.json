@@ -1,0 +1,147 @@
+{
+  "name": "Enterprise Invoice OCR to QuickBooks via OpenAI & n8n",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "invoice-intake",
+        "options": {}
+      },
+      "id": "node-webhook-1",
+      "name": "Incoming Invoice Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "binaryToText",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "node-extract-text-2",
+      "name": "Extract PDF Raw Text",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "prompt": "Extract structured invoice data matching the following JSON schema: { vendorName, invoiceNumber, invoiceDate, lineItems: [{ description, quantity, unitPrice, amount }], subtotal, taxAmount, totalAmount }. Return valid JSON only.",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "node-llm-parse-3",
+      "name": "OpenAI Structured Extraction",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.confidenceScore }}",
+              "operation": "largerEqual",
+              "value2": 0.95
+            }
+          ]
+        }
+      },
+      "id": "node-confidence-check-4",
+      "name": "Confidence Threshold Guard",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "resource": "invoice",
+        "operation": "create",
+        "customer": "={{ $json.vendorName }}",
+        "lineItems": "={{ $json.lineItems }}"
+      },
+      "id": "node-qb-sync-5",
+      "name": "Sync to QuickBooks Online",
+      "type": "n8n-nodes-base.quickbooks",
+      "typeVersion": 1,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "channel": "#accounting-exceptions",
+        "text": "=⚠️ Invoice {{ $json.invoiceNumber }} from {{ $json.vendorName }} flagged for manual review (Confidence < 95%). Link: {{ $json.documentUrl }}"
+      },
+      "id": "node-slack-alert-6",
+      "name": "Slack Manual Review Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1120, 400]
+    }
+  ],
+  "connections": {
+    "Incoming Invoice Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF Raw Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Raw Text": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Structured Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Structured Extraction": {
+      "main": [
+        [
+          {
+            "node": "Confidence Threshold Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confidence Threshold Guard": {
+      "main": [
+        [
+          {
+            "node": "Sync to QuickBooks Online",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack Manual Review Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "author": "Jatin Bhutani",
+    "authorUrl": "https://www.jatinbhutani.com",
+    "description": "Zero-touch invoice OCR extraction pipeline syncing line items to QuickBooks Online with confidence score guardrails.",
+    "serviceUrl": "https://www.jatinbhutani.com/services/document-processing"
+  }
+}

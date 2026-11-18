@@ -1,0 +1,148 @@
+{
+  "name": "Speed-to-Lead WhatsApp & SMS Real Estate Lead Qualifier",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "portal-inbound-lead",
+        "options": {}
+      },
+      "id": "node-lead-webhook-1",
+      "name": "Zillow & Web Ingestion Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "prompt": "Evaluate buyer lead criteria: timeline (<90 days?), pre-approval status, target price range, property location. Generate conversational qualification response and score lead from 1 to 100.",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "node-lead-score-2",
+      "name": "AI Intent & Lead Scorer",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.score }}",
+              "operation": "largerEqual",
+              "value2": 70
+            }
+          ]
+        }
+      },
+      "id": "node-high-intent-gate-3",
+      "name": "High-Intent Lead Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "phoneNumber": "={{ $json.phone }}",
+        "message": "={{ $json.conversationalResponse }} Would you like me to book a tour with our senior broker this Saturday at 2 PM?"
+      },
+      "id": "node-sms-send-4",
+      "name": "Instant Sub-60s SMS/WhatsApp",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [920, 220]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "stage": "Hot Qualified Showing Scheduled"
+      },
+      "id": "node-crm-sync-5",
+      "name": "Follow Up Boss / CRM Sync",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [1140, 220]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "stage": "Long-Term Nurture"
+      },
+      "id": "node-nurture-sync-6",
+      "name": "Long-Term Drip Sequence Sync",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [920, 400]
+    }
+  ],
+  "connections": {
+    "Zillow & Web Ingestion Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Intent & Lead Scorer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Intent & Lead Scorer": {
+      "main": [
+        [
+          {
+            "node": "High-Intent Lead Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High-Intent Lead Gate": {
+      "main": [
+        [
+          {
+            "node": "Instant Sub-60s SMS/WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Long-Term Drip Sequence Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instant Sub-60s SMS/WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Follow Up Boss / CRM Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "author": "Jatin Bhutani",
+    "authorUrl": "https://www.jatinbhutani.com",
+    "description": "Sub-60s real estate lead qualification pipeline that intercepts portal inquiries, scores intent, and auto-books showings.",
+    "serviceUrl": "https://www.jatinbhutani.com/real-estate"
+  }
+}

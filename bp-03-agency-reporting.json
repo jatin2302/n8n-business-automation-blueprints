@@ -1,0 +1,130 @@
+{
+  "name": "Executive Morning Briefing Bot (GA4 + Stripe + Meta Ads to Slack)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-1",
+      "name": "Every Weekday at 8:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getSummary",
+        "timeRange": "yesterday"
+      },
+      "id": "node-stripe-metrics-2",
+      "name": "Fetch Stripe Daily Net Revenue",
+      "type": "n8n-nodes-base.stripe",
+      "typeVersion": 1,
+      "position": [460, 220]
+    },
+    {
+      "parameters": {
+        "operation": "getReport",
+        "metrics": "spend,conversions,cpa",
+        "timeRange": "yesterday"
+      },
+      "id": "node-ad-metrics-3",
+      "name": "Fetch Meta & Google Ad Spend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 380]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "prompt": "=Analyze yesterday's business figures:\nStripe Revenue: ${{ $json.stripeNet }}\nAd Spend: ${{ $json.adSpend }}\nROAS: {{ ($json.stripeNet / $json.adSpend).toFixed(2) }}x\n\nWrite a 4-bullet executive Slack brief highlighting: Net Margin, Top Performing Campaign, Anomaly Flags, and Action Item for the Day.",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "node-llm-synthesis-4",
+      "name": "Synthesize Executive Insights",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#executive-briefing",
+        "text": "=📊 *Daily Executive Intelligence Briefing* ({{ $today.format('YYYY-MM-DD') }})\n\n{{ $json.executiveBrief }}\n\n_Generated automatically via n8n & OpenAI • Architected by Jatin Bhutani_"
+      },
+      "id": "node-slack-post-5",
+      "name": "Broadcast to Slack Leadership Channel",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [940, 300]
+    }
+  ],
+  "connections": {
+    "Every Weekday at 8:00 AM": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stripe Daily Net Revenue",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Meta & Google Ad Spend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Stripe Daily Net Revenue": {
+      "main": [
+        [
+          {
+            "node": "Synthesize Executive Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Meta & Google Ad Spend": {
+      "main": [
+        [
+          {
+            "node": "Synthesize Executive Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthesize Executive Insights": {
+      "main": [
+        [
+          {
+            "node": "Broadcast to Slack Leadership Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "author": "Jatin Bhutani",
+    "authorUrl": "https://www.jatinbhutani.com",
+    "description": "Multi-channel automated executive reporting pipeline syncing Stripe revenue and Meta ad spend into Slack daily at 8 AM.",
+    "serviceUrl": "https://www.jatinbhutani.com/services/intelligent-reporting"
+  }
+}
